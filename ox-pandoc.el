@@ -67,14 +67,14 @@
 
 (defconst org-pandoc-colon-separated-options
   '(abbreviations css include-in-header include-before-body
-    include-after-body pdf-engine-opt epub-embed-font bibliography
-    filter lua-filter))
+				  include-after-body pdf-engine-opt epub-embed-font bibliography
+				  filter lua-filter))
 
 (defconst org-pandoc-file-options
   '(abbreviations bibliography citation-abbreviations csl defaults
-    epub-cover-image epub-embed-font epub-metadata include-after-body
-    include-before-body include-in-header log lue-filter
-	print-default-data-file reference-doc syntax-definition))
+				  epub-cover-image epub-embed-font epub-metadata include-after-body
+				  include-before-body include-in-header log lue-filter
+				  print-default-data-file reference-doc syntax-definition))
 
 (defconst org-pandoc-extensions
   '((asciidoc . txt) (beamer . tex)
@@ -97,7 +97,7 @@
 ;; For exporting with ox-pandoc, the "LABEL" attribute is preserved and
 ;; not, as in other exporters, normalised to "NAME"
 (defconst org-pandoc-element-keyword-translation-alist
-	  (--remove (equal "LABEL" (car it) ) org-element-keyword-translation-alist))
+  (--remove (equal "LABEL" (car it) ) org-element-keyword-translation-alist))
 
 (defcustom org-pandoc-with-cite-processors t
   "Non-nil means use built-in Org citation exporter.
@@ -1520,6 +1520,8 @@ version. If nil, no checks are performed and no warnings generated."
 (defvar org-pandoc-format-extensions-str nil)
 (defvar org-pandoc-epub-meta nil)
 (defvar org-pandoc-epub-css nil)
+(defvar org-pandoc-export-directory nil
+  "Provide an optional export directory")
 
 (defun org-pandoc-export (format _a s v b e &optional buf-or-open)
   "General interface for Pandoc Export.
@@ -1534,7 +1536,7 @@ further export to pdf, after converting to FORMAT."
   (setq org-pandoc-format format)
   (let ((org-element-keyword-translation-alist org-pandoc-element-keyword-translation-alist))
     (org-export-to-file 'pandoc (org-export-output-file-name
-				 (concat (make-temp-name ".tmp") ".org") s)
+								 (concat (make-temp-name ".tmp") ".org") s)
       nil ;; Org mode's native async processing is explicitly disabled because we arrange pandoc running asynchronously all the time.
       s v b e (lambda (f) (org-pandoc-run-to-buffer-or-file f format s buf-or-open)))))
 
@@ -1603,8 +1605,8 @@ INFO is a plist holding contextual information."
       ;; a "\qquad" space, ala pandoc-crossref
       ;; (https://github.com/lierdakil/pandoc-crossref)
       (when (org-pandoc--numbered-equation-p latex-env info)
-          (setq replacement-str
-                (format "\n$$\\1$$")))
+        (setq replacement-str
+              (format "\n$$\\1$$")))
 
       ;; For equations with a named links target (`#+NAME:' block), add
       ;; the target to the top of the equation
@@ -1678,7 +1680,7 @@ holding contextual information."
 
          ((string-prefix-p "citeproc_bib_item" path) ; Rendered citation footnote number
 		  ) ;; leave it alone, it should already be correct
-		 
+
          (t                           ; captioned items
           (setq number (org-export-get-ordinal
                         destination info nil #'org-pandoc--has-caption-p))))
@@ -1759,17 +1761,17 @@ Option table is created in this stage."
                (variable . :pandoc-variables))))
   (let ((org-pandoc-valid-options
 		 '((epub-embed-font .    :epub-embed-font)
-               (epub-chapter-level . :epub-chapter-level)
-               (epub-cover-image   . :epub-cover-image)
-               (epub-stylesheet    . :epub-stylesheet)
-               ;;(bibliography .       :bibliography)
-			   )))
+           (epub-chapter-level . :epub-chapter-level)
+           (epub-cover-image   . :epub-cover-image)
+           (epub-stylesheet    . :epub-stylesheet)
+           ;;(bibliography .       :bibliography)
+		   )))
 	;; Bibliography option only for org < 9.5
 	(unless (featurep 'oc)
 	  (setcar org-pandoc-valid-options '(bibliography . :bibliography) ))
 	(org-pandoc-put-options
 	 (--mapcat (-when-let (val (plist-get info (cdr it)))
-               (list (cons (car it) (split-string val "\n"))))
+				 (list (cons (car it) (split-string val "\n"))))
 			   org-pandoc-valid-options)))
   ;; 'ox-pandoc' is derived from 'ox-org'. If 'ox-org' defines its own
   ;; template, then this template function (org-pandoc-template) calls
@@ -1779,7 +1781,7 @@ Option table is created in this stage."
                      (org-export-get-all-transcoders 'org)))))
     (if org-template
         (funcall org-template contents info)
-    contents)))
+      contents)))
 
 (defun org-pandoc-paragraph (paragraph contents _info)
   "Transcode a PARAGRAPH element from Org to Pandoc.
@@ -1885,108 +1887,112 @@ If 0, target is file and converted file will automatically be opend."
         (org-pandoc-put-options `((epub-metadata ,meta-temp-file)))
         (with-temp-file meta-temp-file
           (insert org-pandoc-epub-meta))))
-    (let ((process
-           (org-pandoc-run input-file output-file format
-                           'org-pandoc-sentinel org-pandoc-option-table)))
-      (process-put process 'files (list input-file meta-temp-file css-temp-file))
-      (process-put process 'output-file output-file)
-      (process-put process 'local-hook-symbol local-hook-symbol)
-      (process-put process 'buffer-or-open buffer-or-open))))
 
-(defun org-pandoc-sentinel (process message)
-  "PROCESS sentinel with MESSAGE.
+	(if (not (string= nil org-pandoc-export-directory))
+		(setq output-file (concat org-pandoc-export-directory "/" output-file))
+
+	  (let ((process
+			 (org-pandoc-run input-file output-file format
+							 'org-pandoc-sentinel org-pandoc-option-table)))
+		(process-put process 'files (list input-file meta-temp-file css-temp-file))
+		(process-put process 'output-file output-file)
+		(process-put process 'local-hook-symbol local-hook-symbol)
+		(process-put process 'buffer-or-open buffer-or-open))))
+
+  (defun org-pandoc-sentinel (process message)
+	"PROCESS sentinel with MESSAGE.
 Called on completion of an asynchronous pandoc process."
-  (cl-case (process-status process)
-    (run)
-    (signal
-     ;; Warning.  Temporary files not removed (for now.)
-     (display-warning 'ox-pandoc (format "Signal Received. %s" message)))
-    (exit
-     (dolist (file (process-get process 'files))
-	   (if (and file (file-exists-p file)) (delete-file file))
-	   )
-     (let ((exit-status (process-exit-status process))
-           (buffer (process-buffer process))
-           (output-file (process-get process 'output-file))
-           (local-hook-symbol (process-get process 'local-hook-symbol))
-           (buffer-or-open (process-get process 'buffer-or-open)))
-       (if (/= exit-status 0)
-           (message "Error occured. \n%s"
-                    (with-current-buffer buffer (buffer-string)))
-         (if output-file
-             (progn
-               (kill-buffer buffer)
-               (message "Exported to %s." output-file)
-               (if (and (boundp local-hook-symbol)
-                        (symbol-value local-hook-symbol))
-                   (with-temp-file output-file
-                     (insert-file-contents output-file)
-                     (run-hooks local-hook-symbol)))
-               (when (equal 0 buffer-or-open)
-                 (org-open-file output-file)))
-           ;; output to buffer
-           (pop-to-buffer buffer)
-		   (goto-char (point-min))
-           (run-hooks local-hook-symbol)
-           (set-auto-mode)))))))
+	(cl-case (process-status process)
+      (run)
+      (signal
+       ;; Warning.  Temporary files not removed (for now.)
+       (display-warning 'ox-pandoc (format "Signal Received. %s" message)))
+      (exit
+       (dolist (file (process-get process 'files))
+		 (if (and file (file-exists-p file)) (delete-file file))
+		 )
+       (let ((exit-status (process-exit-status process))
+			 (buffer (process-buffer process))
+			 (output-file (process-get process 'output-file))
+			 (local-hook-symbol (process-get process 'local-hook-symbol))
+			 (buffer-or-open (process-get process 'buffer-or-open)))
+		 (if (/= exit-status 0)
+			 (message "Error occured. \n%s"
+                      (with-current-buffer buffer (buffer-string)))
+           (if output-file
+               (progn
+				 (kill-buffer buffer)
+				 (message "Exported to %s." output-file)
+				 (if (and (boundp local-hook-symbol)
+                          (symbol-value local-hook-symbol))
+					 (with-temp-file output-file
+                       (insert-file-contents output-file)
+                       (run-hooks local-hook-symbol)))
+				 (when (equal 0 buffer-or-open)
+                   (org-open-file output-file)))
+			 ;; output to buffer
+			 (pop-to-buffer buffer)
+			 (goto-char (point-min))
+			 (run-hooks local-hook-symbol)
+			 (set-auto-mode)))))))
 
-(defun org-pandoc-run (input-file output-file format sentinel &optional options)
-  "Run pandoc command with INPUT-FILE (org), OUTPUT-FILE, FORMAT and OPTIONS.
+  (defun org-pandoc-run (input-file output-file format sentinel &optional options)
+	"Run pandoc command with INPUT-FILE (org), OUTPUT-FILE, FORMAT and OPTIONS.
 If BUFFER-OR-FILE is buffer, then output to specified buffer. OPTIONS is
 a hashtable.  Pandoc runs asynchronously and SENTINEL is called
 when the process completes."
-  (let* ((format (symbol-name format))
-         (output-format
-          (car (--filter (string-prefix-p format it)
-                         org-pandoc-format-extensions-str)))
-         (args
-          `("-f" "org"
-            "-t" ,(or output-format format)
-            ,@(and output-file
-                   (list "-o" (expand-file-name output-file)))
-            ,@(-mapcat (lambda (key)
-                         (-when-let (vals (gethash key options))
-                           (if (equal vals t) (setq vals (list t)))
-                           (--map (concat "--" (symbol-name key)
-                                          (when (not (equal it t)) (format "=%s" it)))
-                                  vals)))
-                       (ht-keys options))
-            ,(expand-file-name input-file))))
-    (message "Running pandoc with args: %s" args)
-    (let ((process
-           (apply 'start-process
-                  `("pandoc" ,(generate-new-buffer "*Pandoc*")
-                    ,org-pandoc-command ,@args))))
-      (set-process-sentinel process sentinel)
-      process)))
+	(let* ((format (symbol-name format))
+           (output-format
+			(car (--filter (string-prefix-p format it)
+                           org-pandoc-format-extensions-str)))
+           (args
+			`("-f" "org"
+              "-t" ,(or output-format format)
+              ,@(and output-file
+					 (list "-o" (expand-file-name output-file)))
+              ,@(-mapcat (lambda (key)
+                           (-when-let (vals (gethash key options))
+							 (if (equal vals t) (setq vals (list t)))
+							 (--map (concat "--" (symbol-name key)
+											(when (not (equal it t)) (format "=%s" it)))
+									vals)))
+						 (ht-keys options))
+              ,(expand-file-name input-file))))
+      (message "Running pandoc with args: %s" args)
+      (let ((process
+			 (apply 'start-process
+					`("pandoc" ,(generate-new-buffer "*Pandoc*")
+                      ,org-pandoc-command ,@args))))
+		(set-process-sentinel process sentinel)
+		process)))
 
-(defun org-pandoc-startup-check ()
-  "Check the current pandoc version."
-  (interactive)
-  (catch 'check-suppressed
-	(unless org-pandoc-check-version
-	  (throw 'check-suppressed nil))
-  (if (not (executable-find org-pandoc-command))
-      (display-warning 'ox-pandoc "Pandoc command is not installed.")
-    (let ((version (with-temp-buffer
-                    (call-process org-pandoc-command nil t nil "-v")
-                    (buffer-string))))
-      (if (not (string-match "^pandoc.*? \\([0-9]+\\)\\.\\([0-9]+\\)" version))
-          (display-warning 'ox-pandoc "Pandoc version number can not be retrieved.")
-        (let ((major (string-to-number (match-string 1 version)))
-              (_minor (string-to-number (match-string 2 version))))
-          (unless (or (< 1 major)
-                      ;;(and (= 1 major)
-                      ;;     (< 12 minor))
-                      )
-            (display-warning 'ox-pandoc "This Pandoc (1.x) may not support new pandoc features."))))))))
+  (defun org-pandoc-startup-check ()
+	"Check the current pandoc version."
+	(interactive)
+	(catch 'check-suppressed
+	  (unless org-pandoc-check-version
+		(throw 'check-suppressed nil))
+	  (if (not (executable-find org-pandoc-command))
+		  (display-warning 'ox-pandoc "Pandoc command is not installed.")
+		(let ((version (with-temp-buffer
+						 (call-process org-pandoc-command nil t nil "-v")
+						 (buffer-string))))
+		  (if (not (string-match "^pandoc.*? \\([0-9]+\\)\\.\\([0-9]+\\)" version))
+			  (display-warning 'ox-pandoc "Pandoc version number can not be retrieved.")
+			(let ((major (string-to-number (match-string 1 version)))
+				  (_minor (string-to-number (match-string 2 version))))
+			  (unless (or (< 1 major)
+						  ;;(and (= 1 major)
+						  ;;     (< 12 minor))
+						  )
+				(display-warning 'ox-pandoc "This Pandoc (1.x) may not support new pandoc features."))))))))
 
-(org-pandoc-startup-check)
+  (org-pandoc-startup-check)
 
-(provide 'ox-pandoc)
+  (provide 'ox-pandoc)
 
 ;;; ox-pandoc.el ends here
 
-;; Local Variables:
-;; time-stamp-pattern: "10/Version:\\\\?[ \t]+1.%02y%02m%02d\\\\?\n"
-;; End:
+  ;; Local Variables:
+  ;; time-stamp-pattern: "10/Version:\\\\?[ \t]+1.%02y%02m%02d\\\\?\n"
+  ;; End:
